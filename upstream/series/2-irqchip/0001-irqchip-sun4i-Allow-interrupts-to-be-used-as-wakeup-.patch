@@ -1,0 +1,41 @@
+From 699b607f3b0903353e6914976c6a205d26256f32 Mon Sep 17 00:00:00 2001
+From: meteowrite <dtodorovtu@gmail.com>
+Date: Sun, 11 Oct 2026 21:36:04 +0300
+Subject: [PATCH] irqchip/sun4i: Allow interrupts to be used as wakeup sources
+
+The A10/A13 interrupt controller has no wake configuration of its own,
+and these SoCs only support suspend-to-idle, where the controller keeps
+running: any interrupt left enabled wakes the system.
+
+Without an irq_set_wake() callback, enable_irq_wake() fails with -ENXIO
+for interrupts routed through this controller (e.g. the NMI line used by
+the AXP209 PMIC and RTCs), so drivers that arm wakeup in their suspend
+path either warn or abort the suspend.
+
+Set IRQCHIP_SKIP_SET_WAKE so that wakeup sources can be armed.
+
+Tested on a PocketBook 624 (A13): s2idle wakeup through a PCF8563
+alarm (NMI line, shared with the AXP209) and gpio-keys/LRADC keys.
+
+Signed-off-by: meteowrite <dtodorovtu@gmail.com>
+---
+ drivers/irqchip/irq-sun4i.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/irqchip/irq-sun4i.c b/drivers/irqchip/irq-sun4i.c
+index b095d45da75d..8e564e5b6dfc 100644
+--- a/drivers/irqchip/irq-sun4i.c
++++ b/drivers/irqchip/irq-sun4i.c
+@@ -87,7 +87,8 @@ static struct irq_chip sun4i_irq_chip = {
+ 	.irq_eoi	= sun4i_irq_ack,
+ 	.irq_mask	= sun4i_irq_mask,
+ 	.irq_unmask	= sun4i_irq_unmask,
+-	.flags		= IRQCHIP_EOI_THREADED | IRQCHIP_EOI_IF_HANDLED,
++	.flags		= IRQCHIP_EOI_THREADED | IRQCHIP_EOI_IF_HANDLED |
++			  IRQCHIP_SKIP_SET_WAKE,
+ };
+ 
+ static int sun4i_irq_map(struct irq_domain *d, unsigned int virq,
+-- 
+2.39.5
+

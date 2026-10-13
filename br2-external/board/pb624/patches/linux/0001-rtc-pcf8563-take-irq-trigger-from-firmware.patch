@@ -1,0 +1,20 @@
+From: PB624 bring-up
+Subject: [PATCH] rtc: pcf8563: take the IRQ trigger type from firmware
+
+On the PocketBook 624 the PCF8563 INT shares the A13 NMI line with the
+AXP209, whose driver requests it without a trigger type.  The hardcoded
+IRQF_TRIGGER_LOW makes the shared request fail with -EBUSY (flags
+mismatch); the line is level-low anyway.
+
+---
+--- a/drivers/rtc/rtc-pcf8563.c	2026-10-10 18:41:29.576239950 +0300
++++ b/drivers/rtc/rtc-pcf8563.c	2026-10-10 18:41:29.580240083 +0300
+@@ -560,7 +560,7 @@
+ 	if (client->irq > 0) {
+ 		err = devm_request_threaded_irq(&client->dev, client->irq,
+ 				NULL, pcf8563_irq,
+-				IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_LOW,
++				IRQF_SHARED | IRQF_ONESHOT,
+ 				pcf8563_driver.driver.name, client);
+ 		if (err) {
+ 			dev_err(&client->dev, "unable to request IRQ %d\n",

@@ -1,0 +1,17 @@
+From: PB624 bring-up
+Subject: [PATCH] pinctrl: sun5i: PE1 can be a GPIO output
+
+The A13 pin table lists PE0-PE2 as input only, but the PocketBook 624
+drives the e-ink VDD rail from PE1 (function 1 = output, as on PE3+).
+
+---
+--- a/drivers/pinctrl/sunxi/pinctrl-sun5i.c	2026-10-10 21:37:37.498016200 +0300
++++ b/drivers/pinctrl/sunxi/pinctrl-sun5i.c	2026-10-10 21:37:37.502016340 +0300
+@@ -527,6 +527,7 @@
+ 		  SUNXI_FUNCTION_IRQ(0x6, 14)),		/* EINT14 */
+ 	SUNXI_PIN(SUNXI_PINCTRL_PIN(E, 1),
+ 		  SUNXI_FUNCTION(0x0, "gpio_in"),
++		  SUNXI_FUNCTION(0x1, "gpio_out"),
+ 		  SUNXI_FUNCTION(0x2, "ts0"),		/* ERR */
+ 		  SUNXI_FUNCTION(0x3, "csi0"),		/* CK */
+ 		  SUNXI_FUNCTION(0x4, "spi2"),		/* CLK */

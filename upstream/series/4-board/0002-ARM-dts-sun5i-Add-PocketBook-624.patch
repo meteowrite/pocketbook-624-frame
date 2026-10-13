@@ -1,0 +1,290 @@
+From d48d505646dfeb82bf1692bfdcd94345cbe300c8 Mon Sep 17 00:00:00 2001
+From: meteowrite <dtodorovtu@gmail.com>
+Date: Sun, 11 Oct 2026 21:37:00 +0300
+Subject: [PATCH 2/2] ARM: dts: sun5i: Add PocketBook 624
+
+The PocketBook 624 (Basic Touch, pb624-D-ww) is an e-book reader based on
+the Allwinner A13:
+
+- 256 MiB DRAM, AXP209 PMIC, PCF8563 RTC (interrupt on the NMI line,
+  shared with the PMIC)
+- 6" 800x600 ED060SCE e-ink panel (not described, needs an EPD driver)
+- MStar msg2133 touch controller (msg2138 protocol) on I2C2
+- internal and external microSD slots
+- RTL8188EUS Wi-Fi on USB1, powered from the PMIC LDO3
+- four front buttons (two GPIO keys and two on the LRADC), green LED
+- UART1 console
+
+Tested: boot from the internal microSD slot, RTC alarm and key wakeup
+from s2idle, buttons, touch, LED, Wi-Fi and AXP209 power supplies.
+
+Signed-off-by: meteowrite <dtodorovtu@gmail.com>
+---
+ arch/arm/boot/dts/allwinner/Makefile          |   1 +
+ .../allwinner/sun5i-a13-pocketbook-624.dts    | 242 ++++++++++++++++++
+ 2 files changed, 243 insertions(+)
+ create mode 100644 arch/arm/boot/dts/allwinner/sun5i-a13-pocketbook-624.dts
+
+diff --git a/arch/arm/boot/dts/allwinner/Makefile b/arch/arm/boot/dts/allwinner/Makefile
+index 75b2b6a2f7a6..bb22aaeb02e9 100644
+--- a/arch/arm/boot/dts/allwinner/Makefile
++++ b/arch/arm/boot/dts/allwinner/Makefile
+@@ -62,6 +62,7 @@ dtb-$(CONFIG_MACH_SUN5I) += \
+ 	sun5i-a13-olinuxino-micro.dtb \
+ 	sun5i-a13-pocketbook-touch-lux-3.dtb \
+ 	sun5i-a13-pocketbook-614-plus.dtb \
++	sun5i-a13-pocketbook-624.dtb \
+ 	sun5i-a13-q8-tablet.dtb \
+ 	sun5i-a13-utoo-p66.dtb \
+ 	sun5i-gr8-chip-pro.dtb \
+diff --git a/arch/arm/boot/dts/allwinner/sun5i-a13-pocketbook-624.dts b/arch/arm/boot/dts/allwinner/sun5i-a13-pocketbook-624.dts
+new file mode 100644
+index 000000000000..2537845016d6
+--- /dev/null
++++ b/arch/arm/boot/dts/allwinner/sun5i-a13-pocketbook-624.dts
+@@ -0,0 +1,242 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++/*
++ * PocketBook 624 (Basic Touch), Allwinner A13 e-book reader.
++ * The ED060SCE e-ink panel is not described: it needs a dedicated EPD
++ * driver.
++ */
++
++/dts-v1/;
++#include "sun5i-a13.dtsi"
++#include "sunxi-common-regulators.dtsi"
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/leds/common.h>
++
++/ {
++	model = "PocketBook 624";
++	compatible = "pocketbook,624", "allwinner,sun5i-a13";
++
++	aliases {
++		serial0 = &uart1;
++		rtc0 = &pcf8563;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		led-0 {
++			color = <LED_COLOR_ID_GREEN>;
++			function = LED_FUNCTION_STATUS;
++			gpios = <&pio 4 8 GPIO_ACTIVE_LOW>; /* PE8 */
++		};
++	};
++
++	gpio-keys {
++		compatible = "gpio-keys";
++
++		key-0 {
++			label = "Home";
++			linux,code = <KEY_HOME>;
++			gpios = <&pio 6 10 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>; /* PG10 */
++			wakeup-source;
++		};
++
++		key-1 {
++			label = "Back";
++			linux,code = <KEY_BACK>;
++			gpios = <&pio 6 9 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>; /* PG9 */
++			wakeup-source;
++		};
++	};
++
++	reg_3v3_mmc0: regulator-mmc0 {
++		compatible = "regulator-fixed";
++		regulator-name = "vdd-mmc0";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&pio 4 4 GPIO_ACTIVE_LOW>; /* PE4 */
++		vin-supply = <&reg_vcc3v3>;
++		/* the card needs a real power cycle when taken over from U-Boot */
++		off-on-delay-us = <200000>;
++	};
++
++	reg_touch: regulator-touch {
++		compatible = "regulator-fixed";
++		regulator-name = "vdd-touch";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&pio 4 5 GPIO_ACTIVE_LOW>; /* PE5 */
++		vin-supply = <&reg_vcc3v3>;
++	};
++};
++
++&cpu0 {
++	cpu-supply = <&reg_dcdc2>;
++};
++
++&ehci0 {
++	status = "okay";
++};
++
++&i2c0 {
++	status = "okay";
++
++	axp209: pmic@34 {
++		reg = <0x34>;
++		interrupts = <0>;
++	};
++};
++
++#include "axp209.dtsi"
++
++&i2c1 {
++	status = "okay";
++
++	/* INT shares the NMI line with the AXP209 */
++	pcf8563: rtc@51 {
++		compatible = "nxp,pcf8563";
++		reg = <0x51>;
++		interrupts = <0>;
++		#clock-cells = <0>;
++		wakeup-source;
++	};
++};
++
++&i2c2 {
++	status = "okay";
++
++	/* msg2133, same protocol as the msg2138 */
++	touchscreen@26 {
++		compatible = "mstar,msg2138";
++		reg = <0x26>;
++		interrupt-parent = <&pio>;
++		interrupts = <6 11 IRQ_TYPE_EDGE_FALLING>; /* PG11 / EINT11 */
++		reset-gpios = <&pio 1 3 GPIO_ACTIVE_LOW>; /* PB3 */
++		vdd-supply = <&reg_touch>;
++		vddio-supply = <&reg_vcc3v3>;
++		touchscreen-size-x = <2048>;
++		touchscreen-size-y = <2048>;
++		touchscreen-inverted-x;
++		touchscreen-swapped-x-y;
++	};
++};
++
++&lradc {
++	vref-supply = <&reg_ldo2>;
++	wakeup-source;
++	status = "okay";
++
++	button-285 {
++		label = "Left";
++		linux,code = <KEY_LEFT>;
++		channel = <0>;
++		voltage = <285714>;
++	};
++
++	button-1333 {
++		label = "Right";
++		linux,code = <KEY_RIGHT>;
++		channel = <0>;
++		voltage = <1333333>;
++	};
++};
++
++&mmc0 {
++	vmmc-supply = <&reg_3v3_mmc0>;
++	bus-width = <4>;
++	cd-gpios = <&pio 6 0 GPIO_ACTIVE_LOW>; /* PG0 */
++	status = "okay";
++};
++
++/* internal microSD slot, no card detect */
++&mmc2 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&mmc2_4bit_pc_pins>;
++	vmmc-supply = <&reg_vcc3v3>;
++	bus-width = <4>;
++	broken-cd;
++	status = "okay";
++};
++
++&ohci0 {
++	status = "okay";
++};
++
++&otg_sram {
++	status = "okay";
++};
++
++&ac_power_supply {
++	status = "okay";
++};
++
++&battery_power_supply {
++	status = "okay";
++};
++
++&reg_dcdc2 {
++	regulator-always-on;
++	regulator-min-microvolt = <1000000>;
++	regulator-max-microvolt = <1400000>;
++	regulator-name = "vdd-cpu";
++};
++
++&reg_dcdc3 {
++	regulator-always-on;
++	regulator-min-microvolt = <1200000>;
++	regulator-max-microvolt = <1200000>;
++	regulator-name = "vdd-int-dll";
++};
++
++&reg_ldo1 {
++	regulator-name = "vdd-rtc";
++};
++
++&reg_ldo2 {
++	regulator-always-on;
++	regulator-min-microvolt = <3000000>;
++	regulator-max-microvolt = <3000000>;
++	regulator-name = "avcc";
++};
++
++/* RTL8188EUS Wi-Fi on USB1 */
++&reg_ldo3 {
++	regulator-min-microvolt = <3300000>;
++	regulator-max-microvolt = <3300000>;
++	regulator-name = "vcc-wifi";
++	regulator-soft-start;
++	regulator-ramp-delay = <1600>;
++};
++
++&reg_ldo4 {
++	regulator-always-on;
++	regulator-min-microvolt = <3300000>;
++	regulator-max-microvolt = <3300000>;
++	regulator-name = "vcc-ldo4";
++};
++
++&uart1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart1_pg_pins>;
++	status = "okay";
++};
++
++&usb_otg {
++	dr_mode = "peripheral";
++	status = "okay";
++};
++
++&usb_power_supply {
++	status = "okay";
++};
++
++&usbphy {
++	usb1_vbus-supply = <&reg_ldo3>;
++	status = "okay";
++};
+-- 
+2.39.5
+

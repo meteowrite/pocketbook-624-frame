@@ -1,0 +1,5 @@
+#!/bin/sh
+# busybox ntpd -S hook: $1 = step | stratum | periodic | unsync
+case "$1" in
+step|stratum) hwclock -u -w; touch /run/time-synced ;;
+esac

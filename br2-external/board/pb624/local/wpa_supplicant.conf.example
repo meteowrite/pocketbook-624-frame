@@ -1,0 +1,8 @@
+ctrl_interface=/var/run/wpa_supplicant
+update_config=0
+country=BG
+
+network={
+	ssid="YOUR-SSID"
+	psk="YOUR-PASSWORD"
+}

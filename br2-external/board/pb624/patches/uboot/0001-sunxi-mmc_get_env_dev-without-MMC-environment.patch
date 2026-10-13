@@ -1,0 +1,18 @@
+From: PB624 bring-up
+Subject: [PATCH] sunxi: build mmc_get_env_dev() only with an MMC environment
+
+With CONFIG_MMC_SUNXI_SLOT_EXTRA set but the environment not on MMC,
+CONFIG_SYS_MMC_ENV_DEV does not exist and board.c fails to build.
+
+---
+--- a/board/sunxi/board.c
++++ b/board/sunxi/board.c
+@@ -540,7 +540,7 @@
+ 	return 0;
+ }
+ 
+-#if CONFIG_MMC_SUNXI_SLOT_EXTRA != -1
++#if CONFIG_MMC_SUNXI_SLOT_EXTRA != -1 && defined(CONFIG_ENV_IS_IN_MMC)
+ int mmc_get_env_dev(void)
+ {
+ 	switch (sunxi_get_boot_device()) {

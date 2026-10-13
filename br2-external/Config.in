@@ -1,0 +1,2 @@
+source "$BR2_EXTERNAL_PB624_PATH/package/epdshow/Config.in"
+source "$BR2_EXTERNAL_PB624_PATH/package/pb624-frame/Config.in"

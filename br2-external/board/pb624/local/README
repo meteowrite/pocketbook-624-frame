@@ -1,0 +1,22 @@
+Your own files: secrets, and files from the stock firmware that this
+repository does not redistribute.  Everything here except README and
+*.example is git-ignored.
+
+Copied onto the data partition by post-image.sh (never into the rootfs):
+  wpa_supplicant.conf  -> /data/config/   (Wi-Fi, see wpa_supplicant.conf.example)
+  frame.json           -> /data/config/   (optional, else edit in the web UI)
+  authorized_keys      -> /data/ssh/      (optional, ssh root login by key)
+  pb624_dev_key.pub    -> /data/ssh/authorized_keys if there is no
+                          authorized_keys (scripts/update.sh uses pb624_dev_key)
+
+Copied into the rootfs by post-build.sh:
+  default.wbf          REQUIRED. The E Ink waveform for the ED060SCE panel,
+                       /usr/share/pb624/default.wbf.  It is on the original
+                       internal microSD card of the PB624: first partition
+                       (FAT, 32 MB), file default.wbf.  Copy it from that card
+                       or from a backup image of it.  It is not included
+                       here because it is E Ink / PocketBook property.
+  low_pwr.pgm          optional 800x600 binary PGM shown before the low-battery
+                       power-off (the app draws a text screen otherwise); e.g.
+                       the stock low_pwr.bmp from the same partition, converted
+                       with tools/bmp2pgm.py.

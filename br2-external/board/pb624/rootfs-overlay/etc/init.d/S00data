@@ -1,0 +1,31 @@
+#!/bin/sh
+# Check and mount the data partition (config, photos, ssh keys).
+# S00: before syslogd, which logs to /data/log (see /etc/default/syslogd)
+# the ext4 partition labelled "data", on whichever card holds the rootfs
+DEV=
+for d in /dev/mmcblk*p2; do
+	blkid "$d" 2>/dev/null | grep -q 'LABEL="data"' && { DEV=$d; break; }
+done
+
+case "$1" in
+start)
+	printf "Mounting /data: "
+	mkdir -p /data
+	[ -n "$DEV" ] && e2fsck -p $DEV >/dev/null 2>&1
+	if [ -n "$DEV" ] && mount -t ext4 -o noatime $DEV /data; then
+		mkdir -p /data/config /data/photos /data/dropbear /data/ssh /data/state /data/log
+		# mke2fs -d keeps the build host's uid; dropbear insists on root
+		chown -R 0:0 /data/config /data/dropbear /data/ssh /data/state
+		chmod 700 /data/dropbear /data/ssh
+		echo "OK"
+	else
+		mount -t tmpfs -o mode=0755 tmpfs /data
+		mkdir -p /data/config /data/photos /data/dropbear /data/ssh /data/state /data/log
+		echo "FAIL (using tmpfs)"
+	fi
+	;;
+stop)
+	sync
+	umount /data 2>/dev/null
+	;;
+esac

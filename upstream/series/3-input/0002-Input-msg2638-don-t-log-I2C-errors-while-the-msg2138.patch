@@ -1,0 +1,88 @@
+From 9144b841613fd761e11b3fb85502b8c4b2276bd2 Mon Sep 17 00:00:00 2001
+From: meteowrite <dtodorovtu@gmail.com>
+Date: Sun, 11 Oct 2026 21:36:47 +0300
+Subject: [PATCH 2/3] Input: msg2638 - don't log I2C errors while the msg2138
+ firmware boots
+
+After reset, the msg2138 family firmware takes more than a second
+before it answers on I2C (1175 ms measured on a msg2133), while the
+interrupt line can already toggle. Every touch event in that window
+logs "Failed I2C transfer in irq handler" although nothing is wrong.
+
+Record when the firmware is expected to be up and silently drop failed
+reads before that. Waiting in msg2638_start() instead would delay
+input open() and system resume by the same amount.
+
+Tested on a PocketBook 624 (msg2133).
+
+Signed-off-by: meteowrite <dtodorovtu@gmail.com>
+---
+ drivers/input/touchscreen/msg2638.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/input/touchscreen/msg2638.c b/drivers/input/touchscreen/msg2638.c
+index 1c9ee9e16875..9c75c538d902 100644
+--- a/drivers/input/touchscreen/msg2638.c
++++ b/drivers/input/touchscreen/msg2638.c
+@@ -18,6 +18,7 @@
+ #include <linux/input/mt.h>
+ #include <linux/input/touchscreen.h>
+ #include <linux/interrupt.h>
++#include <linux/jiffies.h>
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/property.h>
+@@ -39,6 +40,7 @@
+ struct msg_chip_data {
+ 	irq_handler_t irq_handler;
+ 	unsigned int max_fingers;
++	unsigned int firmware_boot_ms;	/* until the chip answers on I2C */
+ };
+ 
+ struct msg2138_packet {
+@@ -73,6 +75,8 @@ struct msg2638_ts_data {
+ 	struct touchscreen_properties prop;
+ 	struct regulator_bulk_data supplies[2];
+ 	struct gpio_desc *reset_gpiod;
++	unsigned int firmware_boot_ms;
++	unsigned long ready;	/* jiffies at which the firmware is up */
+ 	int max_fingers;
+ 	u32 keycodes[MAX_BUTTONS];
+ 	int num_keycodes;
+@@ -124,6 +128,9 @@ static irqreturn_t msg2138_ts_irq_handler(int irq, void *msg2638_handler)
+ 
+ 	ret = i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg));
+ 	if (ret != ARRAY_SIZE(msg)) {
++		/* The firmware does not answer while it boots after reset */
++		if (time_before(jiffies, msg2638->ready))
++			goto out;
+ 		dev_err(&client->dev,
+ 			"Failed I2C transfer in irq handler: %d\n",
+ 			ret < 0 ? ret : -EIO);
+@@ -245,6 +252,7 @@ static void msg2638_reset(struct msg2638_ts_data *msg2638)
+ 	usleep_range(RESET_DELAY_MIN_US, RESET_DELAY_MAX_US);
+ 	gpiod_set_value_cansleep(msg2638->reset_gpiod, 0);
+ 	msleep(FIRMWARE_ON_DELAY_MS);
++	msg2638->ready = jiffies + msecs_to_jiffies(msg2638->firmware_boot_ms);
+ }
+ 
+ static int msg2638_start(struct msg2638_ts_data *msg2638)
+@@ -381,6 +389,7 @@ static int msg2638_ts_probe(struct i2c_client *client)
+ 	}
+ 
+ 	msg2638->max_fingers = chip_data->max_fingers;
++	msg2638->firmware_boot_ms = chip_data->firmware_boot_ms;
+ 
+ 	msg2638->supplies[0].supply = "vdd";
+ 	msg2638->supplies[1].supply = "vddio";
+@@ -476,6 +485,7 @@ static DEFINE_SIMPLE_DEV_PM_OPS(msg2638_pm_ops, msg2638_suspend, msg2638_resume)
+ static const struct msg_chip_data msg2138_data = {
+ 	.irq_handler = msg2138_ts_irq_handler,
+ 	.max_fingers = MSG2138_MAX_FINGERS,
++	.firmware_boot_ms = 1300,
+ };
+ 
+ static const struct msg_chip_data msg2638_data = {
+-- 
+2.39.5
+

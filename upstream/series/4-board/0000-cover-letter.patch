@@ -1,0 +1,33 @@
+From d48d505646dfeb82bf1692bfdcd94345cbe300c8 Mon Sep 17 00:00:00 2001
+From: meteowrite <dtodorovtu@gmail.com>
+Date: Sun, 11 Oct 2026 21:39:59 +0300
+Subject: [PATCH 0/2] ARM: dts: sun5i: Add PocketBook 624
+
+Add the PocketBook 624 (Basic Touch), an Allwinner A13 e-book reader
+similar to the already supported PocketBook Touch Lux 3 and 614 Plus.
+
+The e-ink panel is left out: it needs a dedicated EPD driver.
+
+The touchscreen node uses touchscreen-inverted-x and
+touchscreen-swapped-x-y; dtbs_check is clean only with the msg2638
+binding fix "dt-bindings: input: touchscreen: msg2638: Allow common
+touchscreen properties", sent to the input tree.
+
+Wakeup from s2idle through the RTC and the keys also needs
+"irqchip/sun4i: Allow interrupts to be used as wakeup sources", sent
+separately.
+
+
+meteowrite (2):
+  dt-bindings: arm: sunxi: Add PocketBook 624
+  ARM: dts: sun5i: Add PocketBook 624
+
+ .../devicetree/bindings/arm/sunxi.yaml        |   5 +
+ arch/arm/boot/dts/allwinner/Makefile          |   1 +
+ .../allwinner/sun5i-a13-pocketbook-624.dts    | 242 ++++++++++++++++++
+ 3 files changed, 248 insertions(+)
+ create mode 100644 arch/arm/boot/dts/allwinner/sun5i-a13-pocketbook-624.dts
+
+-- 
+2.39.5
+

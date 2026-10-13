@@ -1,0 +1,50 @@
+From 3d650a591766f137b4bc2367036bf232a93db687 Mon Sep 17 00:00:00 2001
+From: meteowrite <dtodorovtu@gmail.com>
+Date: Sun, 11 Oct 2026 21:36:03 +0300
+Subject: [PATCH] pinctrl: sunxi: sun5i: Allow PE0-PE2 to be used as GPIO
+ outputs
+
+The sun5i pin table only lists the gpio_in function for PE0, PE1 and
+PE2, while every other port pin, and PE0-PE2 in the sun4i-a10 table,
+also has gpio_out (function 1). As a result, pinctrl refuses
+direction_output on these pins with -EINVAL.
+
+The PocketBook 624 (A13) switches the e-ink panel VDD rail from PE1
+(stock firmware: port:PE01<1>), and driving PE1 as an output works as
+expected on that board. PE0 and PE2 share the same configuration
+register field layout, so add gpio_out for all three pins.
+
+Signed-off-by: meteowrite <dtodorovtu@gmail.com>
+---
+ drivers/pinctrl/sunxi/pinctrl-sun5i.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/pinctrl/sunxi/pinctrl-sun5i.c b/drivers/pinctrl/sunxi/pinctrl-sun5i.c
+index 6eef314c9377..f13becd8cc61 100644
+--- a/drivers/pinctrl/sunxi/pinctrl-sun5i.c
++++ b/drivers/pinctrl/sunxi/pinctrl-sun5i.c
+@@ -524,18 +524,21 @@ static const struct sunxi_desc_pin sun5i_pins[] = {
+ 	/* Hole */
+ 	SUNXI_PIN(SUNXI_PINCTRL_PIN(E, 0),
+ 		  SUNXI_FUNCTION(0x0, "gpio_in"),
++		  SUNXI_FUNCTION(0x1, "gpio_out"),
+ 		  SUNXI_FUNCTION(0x2, "ts0"),		/* CLK */
+ 		  SUNXI_FUNCTION(0x3, "csi0"),		/* PCK */
+ 		  SUNXI_FUNCTION(0x4, "spi2"),		/* CS0 */
+ 		  SUNXI_FUNCTION_IRQ(0x6, 14)),		/* EINT14 */
+ 	SUNXI_PIN(SUNXI_PINCTRL_PIN(E, 1),
+ 		  SUNXI_FUNCTION(0x0, "gpio_in"),
++		  SUNXI_FUNCTION(0x1, "gpio_out"),
+ 		  SUNXI_FUNCTION(0x2, "ts0"),		/* ERR */
+ 		  SUNXI_FUNCTION(0x3, "csi0"),		/* CK */
+ 		  SUNXI_FUNCTION(0x4, "spi2"),		/* CLK */
+ 		  SUNXI_FUNCTION_IRQ(0x6, 15)),		/* EINT15 */
+ 	SUNXI_PIN(SUNXI_PINCTRL_PIN(E, 2),
+ 		  SUNXI_FUNCTION(0x0, "gpio_in"),
++		  SUNXI_FUNCTION(0x1, "gpio_out"),
+ 		  SUNXI_FUNCTION(0x2, "ts0"),		/* SYNC */
+ 		  SUNXI_FUNCTION(0x3, "csi0"),		/* HSYNC */
+ 		  SUNXI_FUNCTION(0x4, "spi2")),		/* MOSI */
+-- 
+2.39.5
+

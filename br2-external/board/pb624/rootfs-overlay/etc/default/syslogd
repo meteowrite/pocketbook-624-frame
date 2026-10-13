@@ -1,0 +1,2 @@
+# persistent log on the data partition: 2 x 512 KB rotated, survives reboots
+SYSLOGD_ARGS="-O /data/log/messages -s 512 -b 2"

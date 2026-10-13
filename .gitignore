@@ -1,0 +1,22 @@
+# download cache and build output (see build.sh); buildroot/ is a submodule
+/dl/
+/output/
+# generated or large binaries
+*.cpio.gz
+uRamdisk*
+zImage
+zImage-*
+*.img
+*.scr
+*.dtb
+*.bin
+fel-ramdisk/.tmp*
+__pycache__/
+upstream/out/
+upstream/venv/
+# secrets and stock-firmware files live in br2-external/board/pb624/local
+# (see br2-external/.gitignore and local/README)
+# not redistributable: files from the stock firmware, and personal pictures
+/reference/stock-firmware/
+/fel-ramdisk/low_pwr.pgm
+/fel-ramdisk/gali_mitko.pgm

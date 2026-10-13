@@ -1,0 +1,4 @@
+board/pb624/local/*
+!board/pb624/local/README
+!board/pb624/local/*.example
+__pycache__/

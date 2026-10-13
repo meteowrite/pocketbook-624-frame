@@ -1,0 +1,27 @@
+#!/bin/sh
+# PB624 rootfs tweaks (TARGET_DIR is $1)
+set -e
+T="$1"
+# persistent ssh host keys and authorized_keys on /data
+ln -snf /data/dropbear "$T/etc/dropbear"
+mkdir -p "$T/root"
+ln -snf /data/ssh "$T/root/.ssh"
+# mount point for the data partition (rootfs is read-only)
+mkdir -p "$T/data"
+# renamed init scripts leave the old copy behind in an incremental build
+rm -f "$T/etc/init.d/S05data"
+# Files from the stock firmware that this repo does not redistribute; put
+# your own copies in board/pb624/local/ (see local/README).
+L="$(cd "$(dirname "$0")" && pwd)/local"
+mkdir -p "$T/usr/share/pb624" "$T/boot"
+if [ ! -f "$L/default.wbf" ]; then
+	echo "post-build: missing $L/default.wbf (e-ink waveform, see local/README)" >&2
+	exit 1
+fi
+cp "$L/default.wbf" "$T/usr/share/pb624/default.wbf"
+ln -snf /usr/share/pb624/default.wbf "$T/boot/default.wbf"
+# optional low-battery picture (800x600 PGM); the app draws one otherwise
+rm -f "$T/usr/share/pb624/low_pwr.pgm"
+if [ -f "$L/low_pwr.pgm" ]; then
+	cp "$L/low_pwr.pgm" "$T/usr/share/pb624/low_pwr.pgm"
+fi

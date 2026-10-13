@@ -1,0 +1,43 @@
+From 8a21f1cdd2cb4b409155a29e803118f7f4c0e2e1 Mon Sep 17 00:00:00 2001
+From: meteowrite <dtodorovtu@gmail.com>
+Date: Mon, 12 Oct 2026 08:59:32 +0300
+Subject: [PATCH] rtc: pcf8563: fix the interrupt handler's dev_id
+
+Since the switch to regmap, pcf8563_irq() takes its struct pcf8563 straight
+from dev_id, but the interrupt is still requested with the i2c_client as
+dev_id. Any interrupt that reaches the handler then dereferences the client
+as the driver data and crashes in regmap_read():
+
+  Unable to handle kernel paging request at virtual address 0033374d when read
+  PC is at regmap_read+0x4/0x60
+  LR is at pcf8563_irq+0x34/0x94
+
+On boards where the RTC interrupt is shared (here with the AXP209 PMIC on the
+A13 NMI line), every PMIC interrupt, such as a power key press, runs the
+handler and kills the IRQ thread.
+
+Pass the driver data as dev_id, as the handler expects.
+
+Fixes: 00f1bb9b8486 ("rtc: pcf8563: Switch to regmap")
+Cc: stable@vger.kernel.org
+Signed-off-by: meteowrite <dtodorovtu@gmail.com>
+---
+ drivers/rtc/rtc-pcf8563.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/rtc/rtc-pcf8563.c b/drivers/rtc/rtc-pcf8563.c
+index 7eebdb058067..0767331a2cc7 100644
+--- a/drivers/rtc/rtc-pcf8563.c
++++ b/drivers/rtc/rtc-pcf8563.c
+@@ -531,7 +531,7 @@ static int pcf8563_probe(struct i2c_client *client)
+ 		err = devm_request_threaded_irq(&client->dev, client->irq,
+ 				NULL, pcf8563_irq,
+ 				IRQF_SHARED | IRQF_ONESHOT | irqflags,
+-				pcf8563_driver.driver.name, client);
++				pcf8563_driver.driver.name, pcf8563);
+ 		if (err) {
+ 			dev_err(&client->dev, "unable to request IRQ %d\n",
+ 								client->irq);
+-- 
+2.39.5
+

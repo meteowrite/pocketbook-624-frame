@@ -1,0 +1,10 @@
+config BR2_PACKAGE_PB624_FRAME
+	bool "pb624-frame"
+	depends on BR2_PACKAGE_PYTHON3
+	select BR2_PACKAGE_EPDSHOW
+	select BR2_PACKAGE_PYTHON_PILLOW
+	select BR2_PACKAGE_PYTHON_PAHO_MQTT
+	help
+	  Photo frame / weather station application for the PocketBook 624:
+	  e-ink rendering, buttons, battery, suspend, web UI and Home
+	  Assistant MQTT discovery.

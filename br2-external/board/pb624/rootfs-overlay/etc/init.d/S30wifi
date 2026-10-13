@@ -1,0 +1,29 @@
+#!/bin/sh
+# RTL8188EUS on the internal USB port (staging r8188eu, wext only).
+CONF=/data/config/wpa_supplicant.conf
+PIDF=/run/wpa_supplicant.pid
+DHCPF=/run/udhcpc.wlan0.pid
+
+start() {
+	[ -f $CONF ] || { echo "wifi: no $CONF"; return 1; }
+	modprobe r8188eu
+	for i in $(seq 50); do [ -e /sys/class/net/wlan0 ] && break; sleep 0.2; done
+	ip link set wlan0 up
+	wpa_supplicant -B -q -P $PIDF -D wext -i wlan0 -c $CONF
+	udhcpc -b -S -t 10 -i wlan0 -x hostname:$(hostname) -p $DHCPF
+}
+
+stop() {
+	[ -f $DHCPF ] && kill $(cat $DHCPF) 2>/dev/null
+	[ -f $PIDF ] && kill $(cat $PIDF) 2>/dev/null
+	sleep 0.5
+	ip link set wlan0 down 2>/dev/null
+	rm -f $PIDF $DHCPF
+	modprobe -r r8188eu 2>/dev/null
+}
+
+case "$1" in
+start) printf "Starting wifi: "; start && echo OK ;;
+stop) printf "Stopping wifi: "; stop; echo OK ;;
+restart) stop; start ;;
+esac

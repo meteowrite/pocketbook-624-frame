@@ -1,0 +1,14 @@
+#!/bin/sh
+PIDF=/run/pb624-frame.pid
+case "$1" in
+start)
+	printf "Starting pb624-frame: "
+	start-stop-daemon -S -q -b -m -p $PIDF --exec /usr/bin/python3 -- \
+		/usr/lib/pb624-frame/main.py && echo OK
+	;;
+stop)
+	printf "Stopping pb624-frame: "
+	start-stop-daemon -K -q -p $PIDF && echo OK; rm -f $PIDF
+	;;
+restart) $0 stop; sleep 1; $0 start ;;
+esac

@@ -1,0 +1,159 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * PocketBook 624 (Basic Touch) - ED060SCE e-ink panel driven by TCON0.
+ *
+ * The A13 has no EPD controller: TCON0 scans out a 258x620 XRGB8888
+ * "step buffer" whose bits drive the panel signals directly (PDn = bit n).
+ * Timings come from the stock script.bin [lcd0_para] / PocketBook GPL
+ * disp_eink_config.h.  Userspace (epdshow) composes waveform frames and
+ * switches the panel rails through GPIOs, so none of the rail pins are
+ * claimed here.
+ *
+ *   PD3-7,PD10-12  source data (4 px x 2 bit per clock)
+ *   PD13 XLE   PD15 MODE   PD20 XOE   PD21 XSTL   PD22 CKV   PD23 SPV
+ *   PD24 SDCLK (LCD pixel clock)
+ *
+ *   Rails (GPIO, userspace): PE1 VDD (active low), PE3 VNEG, PB10 VPOS,
+ *   PD18 VGG, PD19 VCOM, PD2 RL, PD14 UD
+ */
+
+/dts-v1/;
+#include "sun5i-a13.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	model = "PocketBook 624";
+	compatible = "pocketbook,624", "allwinner,sun5i-a13";
+
+	aliases {
+		serial0 = &uart1;
+		mmc0 = &mmc0;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	vcc3v3: regulator-vcc3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+
+	epd_panel: panel {
+		compatible = "panel-dpi";
+		width-mm = <122>;
+		height-mm = <91>;
+
+		panel-timing {
+			clock-frequency = <16000000>;
+			hactive = <258>;
+			vactive = <620>;
+			/* htotal 271, hbp(sync+back) 2 */
+			hfront-porch = <11>;
+			hsync-len = <1>;
+			hback-porch = <1>;
+			/* vtotal 695, vbp(sync+back) 2 */
+			vfront-porch = <73>;
+			vsync-len = <1>;
+			vback-porch = <1>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+			de-active = <1>;
+			/* lcd_io_cfg0 = 0x04000000: data driven on DCLK falling edge */
+			pixelclk-active = <0>;
+		};
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&tcon0_out_panel>;
+			};
+		};
+	};
+};
+
+/*
+ * No AXP209 node yet, so cpufreq-dt would raise the clock without raising
+ * vdd-cpu (FEL leaves it low) and lock the CPU up.  Stay at the boot clock.
+ */
+&cpu0 {
+	/delete-property/ operating-points;
+};
+
+&be0 {
+	status = "okay";
+};
+
+&i2c0 {
+	status = "okay";
+};
+
+&i2c1 {
+	status = "okay";
+};
+
+&mmc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mmc0_pins>;
+	vmmc-supply = <&vcc3v3>;
+	bus-width = <4>;
+	max-frequency = <25000000>;
+	broken-cd;
+	status = "okay";
+};
+
+&pio {
+	vcc-pb-supply = <&vcc3v3>;
+	vcc-pc-supply = <&vcc3v3>;
+	vcc-pd-supply = <&vcc3v3>;
+	vcc-pe-supply = <&vcc3v3>;
+	vcc-pf-supply = <&vcc3v3>;
+	vcc-pg-supply = <&vcc3v3>;
+
+	lcd_epd_pins: lcd-epd-pins {
+		pins = "PD3", "PD4", "PD5", "PD6", "PD7",
+		       "PD10", "PD11", "PD12", "PD13", "PD15",
+		       "PD20", "PD21", "PD22", "PD23", "PD24";
+		function = "lcd0";
+	};
+};
+
+&tcon0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&lcd_epd_pins>;
+	status = "okay";
+};
+
+&tcon0_out {
+	tcon0_out_panel: endpoint@0 {
+		reg = <0>;
+		remote-endpoint = <&panel_in>;
+	};
+};
+
+/*
+ * USB OTG (the FEL port) in peripheral mode with no gadget bound: the musb
+ * driver resets the core and drops the D+ pull-up, so the host sees a clean
+ * unplug once Linux starts.  Otherwise the dead BROM connection lingers and
+ * VMware's USB stub wedges, blocking the next FEL attach.
+ */
+&otg_sram {
+	status = "okay";
+};
+
+&usb_otg {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usbphy {
+	status = "okay";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart1_pg_pins>;
+	status = "okay";
+};

@@ -1,0 +1,21 @@
+From: PB624 bring-up
+Subject: [PATCH] irqchip/sun4i: allow wakeup sources (IRQCHIP_SKIP_SET_WAKE)
+
+A10/A13 only support s2idle, where the interrupt controller stays alive,
+so any enabled interrupt can wake the system.  Without irq_set_wake every
+wakeup-source (gpio-keys, AXP209 power key, RTC alarm) fails to arm with
+-ENXIO and aborts suspend.
+
+---
+--- a/drivers/irqchip/irq-sun4i.c	2026-10-10 18:45:15.047621373 +0300
++++ b/drivers/irqchip/irq-sun4i.c	2026-10-10 18:45:15.055621633 +0300
+@@ -87,7 +87,8 @@
+ 	.irq_eoi	= sun4i_irq_ack,
+ 	.irq_mask	= sun4i_irq_mask,
+ 	.irq_unmask	= sun4i_irq_unmask,
+-	.flags		= IRQCHIP_EOI_THREADED | IRQCHIP_EOI_IF_HANDLED,
++	.flags		= IRQCHIP_EOI_THREADED | IRQCHIP_EOI_IF_HANDLED |
++			  IRQCHIP_SKIP_SET_WAKE,
+ };
+ 
+ static int sun4i_irq_map(struct irq_domain *d, unsigned int virq,

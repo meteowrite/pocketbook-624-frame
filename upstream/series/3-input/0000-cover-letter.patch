@@ -1,0 +1,33 @@
+From c87b8bda949babf422da3ce332ad8b9f0529d97a Mon Sep 17 00:00:00 2001
+From: meteowrite <dtodorovtu@gmail.com>
+Date: Sun, 11 Oct 2026 21:39:54 +0300
+Subject: [PATCH 0/3] Input: msg2638 - msg2138 fixes for the msg2133
+
+The PocketBook 624 e-book reader (Allwinner A13) uses an MStar msg2133
+touch controller, which speaks the same protocol as the msg2138 that the
+msg2638 driver already supports. Bringing it up showed two driver issues
+and one binding limitation:
+
+1. The second finger is a signed 12-bit offset from the first one, but
+   the driver adds it unsigned.
+2. The firmware needs ~1.2 s after reset before it answers on I2C, and
+   every interrupt in that window is logged as a failed transfer.
+3. The binding does not allow touchscreen-inverted-x/-swapped-x-y,
+   which this board needs (the panel is mounted rotated).
+
+The board DT using this is sent separately to the sunxi maintainers.
+
+
+meteowrite (3):
+  Input: msg2638 - fix msg2138 second finger position
+  Input: msg2638 - don't log I2C errors while the msg2138 firmware boots
+  dt-bindings: input: touchscreen: msg2638: Allow common touchscreen
+    properties
+
+ .../input/touchscreen/mstar,msg2638.yaml      |  2 +-
+ drivers/input/touchscreen/msg2638.c           | 19 +++++++++++++++----
+ 2 files changed, 16 insertions(+), 5 deletions(-)
+
+-- 
+2.39.5
+

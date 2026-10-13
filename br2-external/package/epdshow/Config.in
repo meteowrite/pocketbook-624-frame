@@ -1,0 +1,5 @@
+config BR2_PACKAGE_EPDSHOW
+	bool "epdshow"
+	help
+	  Userspace e-ink driver for the PocketBook 624 (ED060SCE on the
+	  A13 TCON0): WBF waveforms, panel rails via GPIO, DRM page flips.

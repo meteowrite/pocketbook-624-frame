@@ -1,0 +1,22 @@
+# PocketBook 624 on top of A13-OLinuXino
+# The e-ink panel sits on the LCD pins: no VGA-over-LCD splash
+# CONFIG_VIDEO_SUNXI is not set
+# CONFIG_VIDEO_DT_SIMPLEFB is not set
+# CONFIG_VIDEO is not set
+# PG11 is the touch IRQ here, Wi-Fi is powered by AXP LDO3
+CONFIG_USB1_VBUS_PIN=""
+# stock fex: DCDC3 1.2 V, LDO4 3.3 V (OLinuXino turns LDO4 off)
+CONFIG_AXP_DCDC3_VOLT=1200
+CONFIG_AXP_ALDO4_VOLT=3300
+CONFIG_BOOTDELAY=1
+# no FAT partition for an environment
+# CONFIG_ENV_IS_IN_FAT is not set
+CONFIG_ENV_IS_NOWHERE=y
+# Own device tree: powers the external slot (PE4, active low) and enables
+# the internal slot (mmc2).  The BROM can only boot from the internal slot,
+# the external one is unpowered at reset.
+CONFIG_DEFAULT_DEVICE_TREE="sun5i-a13-pocketbook-624"
+CONFIG_MMC_SUNXI_SLOT_EXTRA=2
+CONFIG_USE_PREBOOT=y
+# FEL boots leave mmc_bootdev unset, which makes mmc_auto a no-op
+CONFIG_PREBOOT="gpio clear PE4; if test -z \"${mmc_bootdev}\"; then setenv mmc_bootdev 0; fi"

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Network time; the PCF8563 is written back once ntpd has synced.
+case "$1" in
+start)
+	printf "Starting ntpd: "
+	start-stop-daemon -S -q -b -m -p /run/ntpd.pid --exec /usr/sbin/ntpd -- \
+		-n -p pool.ntp.org -S /usr/libexec/pb624/ntp-event && echo OK
+	;;
+stop)
+	start-stop-daemon -K -q -p /run/ntpd.pid; rm -f /run/ntpd.pid
+	;;
+restart) $0 stop; $0 start ;;
+esac

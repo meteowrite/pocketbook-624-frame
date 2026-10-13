@@ -1,0 +1,33 @@
+From 6d94d7b0ed32f4cf72f126a1625e271a91097d92 Mon Sep 17 00:00:00 2001
+From: meteowrite <dtodorovtu@gmail.com>
+Date: Sun, 11 Oct 2026 21:37:00 +0300
+Subject: [PATCH 1/2] dt-bindings: arm: sunxi: Add PocketBook 624
+
+The PocketBook 624 (Basic Touch) is an e-book reader based on the
+Allwinner A13 with a 6" 800x600 e-ink panel, an MStar msg2133 touch
+controller and an RTL8188EUS Wi-Fi module.
+
+Signed-off-by: meteowrite <dtodorovtu@gmail.com>
+---
+ Documentation/devicetree/bindings/arm/sunxi.yaml | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/arm/sunxi.yaml b/Documentation/devicetree/bindings/arm/sunxi.yaml
+index f04db28c630a..aadbc492e963 100644
+--- a/Documentation/devicetree/bindings/arm/sunxi.yaml
++++ b/Documentation/devicetree/bindings/arm/sunxi.yaml
+@@ -811,6 +811,11 @@ properties:
+           - const: pocketbook,614-plus
+           - const: allwinner,sun5i-a13
+ 
++      - description: PocketBook 624
++        items:
++          - const: pocketbook,624
++          - const: allwinner,sun5i-a13
++
+       - description: Point of View Protab2-IPS9
+         items:
+           - const: pov,protab2-ips9
+-- 
+2.39.5
+
