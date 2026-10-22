@@ -15,7 +15,7 @@ from PIL import Image, ImageOps
 
 import subprocess
 
-from . import epd, ha, hw, mdns, mqtt, ota, render, web
+from . import epd, ha, hw, mdns, mqtt, ota, render, usbdrive, web
 from .config import Config
 
 VERSION = '1.0'
@@ -65,6 +65,7 @@ class App:
         self.ota_next = 0
         self.system = {}
         self._ota_boot()
+        self.usb = None if sim else usbdrive.UsbDrive(self, PHOTO_EXT)
         self._setup_services()
 
     def _setup_services(self):
@@ -152,6 +153,7 @@ class App:
             'system': self.system.get('running'),
             'system_other': self.system.get('other'),
             'system_update': self.system.get('last'),
+            'usb_drive': self.usb.status() if self.usb else None,
         }
 
     def publish(self):
@@ -677,6 +679,11 @@ class App:
             self.check_battery()
             if self.ota_state == 'trial' and not self.sim:
                 self.ota_trial_check()
+            if self.usb:
+                try:
+                    self.usb.poll()
+                except Exception as e:       # never let it stop the frame
+                    print(f'usb drive: {type(e).__name__}: {e}')
             if self.want_sleep():
                 self.sleep()
             if not self.sim and time.time() >= self.next_check:

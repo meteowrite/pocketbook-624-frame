@@ -185,6 +185,19 @@ console). Measured USB input during INIT+GC16: 464 mA at 432 MHz, 591 mA at
 `cpu_max_khz_no_battery` (432 MHz) whenever no battery is detected. With the
 battery fitted or a >= 1 A charger the cap is lifted.
 
+## USB: serial console and photo drive
+The micro-USB port is a composite USB device (configfs, `/etc/init.d/S04usb`):
+- a serial console (`/dev/ttyGS0` on the frame; a COM port / `/dev/ttyACM0` on
+  the PC, login root), and
+- a 4 GB removable FAT32 drive labelled `PB624` (the sparse image
+  `/data/usb/photos.img`, created on first boot). Copy pictures onto it,
+  then eject it (or unplug the cable): the frame imports new and changed
+  pictures into its photo folder, scaled like web uploads, and removes the
+  ones deleted from the drive (`pb624frame/usbdrive.py`, state in
+  `/data/state/usb-drive.json`). Photos uploaded in the web UI are not
+  touched. While a PC has the drive the frame never reads it, so nothing
+  can be corrupted; after an eject it is offered again.
+
 ## Updating a running frame
 The system is kept twice (slots A and B). An update is written to the slot
 that is not running, read back and checked, and then booted as a trial;

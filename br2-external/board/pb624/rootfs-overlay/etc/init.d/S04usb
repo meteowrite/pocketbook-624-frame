@@ -1,0 +1,75 @@
+#!/bin/sh
+# USB device port (micro-USB): serial console (/dev/ttyGS0, getty in
+# inittab) + a removable FAT32 photo drive (/data/usb/photos.img), as one
+# composite gadget via configfs.  The app imports the photos when the PC
+# ejects the drive or the cable is unplugged (pb624frame/usbdrive.py).
+G=/sys/kernel/config/usb_gadget/pb624
+D=/data/usb
+IMG=$D/photos.img
+SIZE_MB=4096
+
+make_image() {
+	# only on the real data partition, never in the tmpfs fallback
+	grep -q ' /data ext4 ' /proc/mounts || return 1
+	free_mb=$(df -m /data | awk 'NR == 2 {print $4}')
+	size=$SIZE_MB
+	[ "$free_mb" -gt $((SIZE_MB + 1024)) ] || size=$((free_mb / 2))
+	[ "$size" -ge 64 ] || return 1
+	mkdir -p $D /run/pb624-usb
+	rm -f $IMG.tmp
+	truncate -s ${size}M $IMG.tmp &&           # sparse: grows as it fills
+	mkdosfs -n PB624 $IMG.tmp >/dev/null &&
+	mount -t vfat -o loop $IMG.tmp /run/pb624-usb || { rm -f $IMG.tmp; return 1; }
+	cat > /run/pb624-usb/README.txt <<-'EOF'
+	PocketBook 624 photo frame - photo drive
+
+	Copy pictures (JPEG, PNG, ...) anywhere on this drive, then eject the
+	drive (or unplug the cable). The frame imports them and shows them with
+	its other photos. Delete a picture here and it is removed from the
+	frame too. The originals stay on this drive.
+	EOF
+	umount /run/pb624-usb
+	mv $IMG.tmp $IMG
+}
+
+case "$1" in
+start)
+	printf "Starting USB gadget: "
+	[ -f $IMG ] || make_image || echo -n "(no photo drive) "
+	mountpoint -q /sys/kernel/config || mount -t configfs none /sys/kernel/config
+	mkdir -p $G && cd $G || exit 1
+	echo 0x1d6b > idVendor              # Linux Foundation
+	echo 0x0104 > idProduct             # multifunction composite gadget
+	echo 0x0100 > bcdDevice
+	echo 0x0200 > bcdUSB
+	echo 0xef > bDeviceClass            # IAD: Windows binds ACM + storage
+	echo 0x02 > bDeviceSubClass
+	echo 0x01 > bDeviceProtocol
+	mkdir -p strings/0x409 configs/c.1/strings/0x409
+	echo PocketBook > strings/0x409/manufacturer
+	echo "PocketBook 624 frame" > strings/0x409/product
+	echo pb624 > strings/0x409/serialnumber
+	echo "serial console + photo drive" > configs/c.1/strings/0x409/configuration
+	echo 500 > configs/c.1/MaxPower
+	mkdir -p functions/acm.usb0
+	[ -e configs/c.1/acm.usb0 ] || ln -s functions/acm.usb0 configs/c.1/
+	if [ -f $IMG ]; then
+		mkdir -p functions/mass_storage.usb0
+		L=functions/mass_storage.usb0/lun.0
+		echo 1 > $L/removable
+		echo 0 > $L/ro
+		echo "PB624   Photo drive     0100" > $L/inquiry_string
+		echo $IMG > $L/file
+		[ -e configs/c.1/mass_storage.usb0 ] ||
+			ln -s functions/mass_storage.usb0 configs/c.1/
+	fi
+	[ -n "$(cat UDC)" ] || ls /sys/class/udc | head -1 > UDC
+	echo "OK"
+	;;
+stop)
+	# release the image (and the data partition) before unmounting /data
+	[ -d $G ] && echo "" > $G/UDC 2>/dev/null
+	[ -d $G/functions/mass_storage.usb0 ] &&
+		echo "" > $G/functions/mass_storage.usb0/lun.0/file 2>/dev/null
+	;;
+esac

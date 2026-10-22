@@ -439,6 +439,7 @@ class Handler(BaseHTTPRequestHandler):
             ('Battery', f'{st.get("battery_v")} V' if st.get('battery_v') else None),
             ('Temperature (board / CPU)', temps or None),
             ('IP address', st.get('ip')),
+            ('USB photo drive', st.get('usb_drive')),
             ('Sleep', st.get('sleep_policy')),
             ('Home Assistant', (st.get('ha_error') or 'ok') if a.ha.configured else 'not set'),
             ('App version', st.get('version')),
@@ -514,7 +515,8 @@ class Handler(BaseHTTPRequestHandler):
 <form method="post" action="/upload" enctype="multipart/form-data" class="row">
 <label class="file"><input type="file" name="photos" accept="image/*" multiple
  onchange="this.form.submit()"><span>＋ Add photos</span></label>
-<span class="note">JPEG, PNG, … — resized and stored on the frame</span></form>
+<span class="note">JPEG, PNG, … — resized and stored on the frame. Or plug the frame
+into a PC: its USB drive <b>PB624</b> takes photos too (eject it when done).</span></form>
 <div class="grid">{grid}</div></section>
 <section class="card wide"><h2>Settings</h2>
 <form method="post" action="/settings">{sections}
