@@ -8,6 +8,13 @@ mkdir -p "$T/root"
 ln -snf /data/ssh "$T/root/.ssh"
 # mount point for the data partition (rootfs is read-only)
 mkdir -p "$T/data"
+# login on the USB serial gadget too (g_serial, /dev/ttyGS0)
+grep -q '^ttyGS0:' "$T/etc/inittab" ||
+	echo 'ttyGS0::respawn:/sbin/getty -L ttyGS0 0 vt100 # USB serial' >> "$T/etc/inittab"
+# version of this build, shown by pb624-ota and the web UI
+REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
+V=$(git -C "$REPO" describe --always --dirty 2>/dev/null || echo unknown)
+echo "$(date -u +%Y%m%d-%H%M) $V" > "$T/etc/pb624-version"
 # renamed init scripts leave the old copy behind in an incremental build
 rm -f "$T/etc/init.d/S05data"
 # Files from the stock firmware that this repo does not redistribute; put

@@ -2,9 +2,11 @@
 # Runs on the board from the FEL flashing ramdisk.
 #   sh /flash/flash.sh [/dev/mmcblkN]  (default: the PB624 card, else mmcblk0)
 # Update mode (card already has the PB624 layout, ext4 "data" in p2): write
-# only U-Boot and the rootfs (p1), keep /data (config, photos, backups).
-# Full mode: back up the old p1 to RAM, write the whole image, grow the data
-# partition to the card, store the backup in /data/backup.
+# only U-Boot and the rootfs (p1 = system slot A), keep /data (config,
+# photos, backups).  This also clears the A/B boot state, so slot A boots.
+# Full mode: back up the old p1 to RAM, write the whole image, add slot B
+# (p3, last 384 MiB), grow the data partition up to it, store the backup in
+# /data/backup.
 # default: the card that already has a PB624 data partition, else mmcblk0
 DEV=$1
 if [ -z "$DEV" ]; then
@@ -51,8 +53,12 @@ fi
 echo "full mode: writing image"
 zcat $IMG | dd of=$DEV bs=1M 2>&1 | tail -1
 sync
-echo "growing data partition"
-printf 'd\n2\nn\np\n2\n%s\n\nw\n' $P2_START | fdisk -u $DEV >/dev/null 2>&1 || true
+echo "adding slot B, growing data partition"
+SECT=$(cat /sys/block/$(basename $DEV)/size)
+B=$(( (SECT - 786432) / 2048 * 2048 ))
+printf 'd\n2\nn\np\n2\n%s\n%s\nn\np\n3\n%s\n\nw\n' $P2_START $((B - 1)) $B |
+	fdisk -u $DEV >/dev/null 2>&1 || true
+dd if=/dev/zero of=$DEV bs=1M seek=$((B / 2048)) count=1 conv=notrunc 2>/dev/null
 partprobe $DEV 2>/dev/null || true
 sleep 1
 grep "$(basename $DEV)" /proc/partitions

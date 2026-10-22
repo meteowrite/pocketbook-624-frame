@@ -20,3 +20,7 @@ CONFIG_MMC_SUNXI_SLOT_EXTRA=2
 CONFIG_USE_PREBOOT=y
 # FEL boots leave mmc_bootdev unset, which makes mmc_auto a no-op
 CONFIG_PREBOOT="gpio clear PE4; if test -z \"${mmc_bootdev}\"; then setenv mmc_bootdev 0; fi"
+# A/B system slots with boot counting (patches/uboot/0002, include/configs/pb624-ab.h);
+# the watchdog is started just before the kernel and Linux takes it over
+CONFIG_BOOTCOMMAND="run pb_boot"
+CONFIG_CMD_WDT=y

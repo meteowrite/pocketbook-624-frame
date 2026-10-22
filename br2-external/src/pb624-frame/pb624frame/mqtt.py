@@ -141,6 +141,9 @@ class MQTT:
             sensor('last_update', 'Last screen update', 'last_update',
                    device_class='timestamp'),
             sensor('screen', 'Showing', 'showing'),
+            sensor('system', 'System', 'system', entity_category='diagnostic'),
+            sensor('system_update', 'Last system update', 'system_update',
+                   entity_category='diagnostic'),
             ('binary_sensor', 'power', {
                 'name': 'External power', 'state_topic': st, 'device_class': 'plug',
                 'value_template': "{{ 'ON' if value_json.external else 'OFF' }}"}),

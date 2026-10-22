@@ -8,7 +8,7 @@
   POST /settings         settings form
   POST /upload           multipart photo upload (field "photos", multiple)
   POST /api/update       body: rootfs.ext2.gz (or multipart field "rootfs")
-                         -> writes the system partition and reboots
+                         -> installs it in the other system slot, reboots into it
   POST /api/show         body: image bytes (any Pillow format), or JSON
                          {"url": "..."} / {"text": "..."}
 """
@@ -305,9 +305,11 @@ class Handler(BaseHTTPRequestHandler):
 <table class="photos">{photos}</table>
 <h2>System update</h2>
 <form method="post" action="/api/update" enctype="multipart/form-data"
- onsubmit="return confirm('Write the new system and reboot?')">
+ onsubmit="return confirm('Install the new system in the other slot and reboot into it?')">
 <input type="file" name="rootfs" accept=".gz"> <button>Update</button>
-<small>pb624-rootfs.ext2.gz from the build (images/)</small></form>
+<small>pb624-rootfs.ext2.gz from the build (images/). Written to the other
+system slot and checked; if it does not come back online within 5 minutes
+the frame returns to the current system by itself.</small></form>
 <h2>Settings</h2>
 <form method="post" action="/settings"><fieldset>{fields}</fieldset>
 <button>Save</button></form>

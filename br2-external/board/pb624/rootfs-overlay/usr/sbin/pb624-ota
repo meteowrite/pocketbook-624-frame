@@ -1,0 +1,3 @@
+#!/bin/sh
+# A/B system updates, see /usr/lib/pb624-frame/pb624frame/ota.py
+exec /usr/bin/python3 /usr/lib/pb624-frame/pb624frame/ota.py "$@"

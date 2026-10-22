@@ -1,0 +1,30 @@
+From: PB624
+Subject: [PATCH] watchdog: sunxi_wdt: keep a boot loader started watchdog running
+
+U-Boot starts the watchdog before booting the kernel (A/B boot counting).
+Instead of stopping it at probe, mark it WDOG_HW_RUNNING so the core
+keeps it alive until user space takes over (or watchdog.open_timeout
+expires).
+
+---
+--- a/drivers/watchdog/sunxi_wdt.c
++++ b/drivers/watchdog/sunxi_wdt.c
+@@ -276,7 +276,17 @@
+ 
+ 	watchdog_set_drvdata(&sunxi_wdt->wdt_dev, sunxi_wdt);
+ 
+-	sunxi_wdt_stop(&sunxi_wdt->wdt_dev);
++	/*
++	 * Started by the boot loader: keep it running (with our timeout) and
++	 * let the watchdog core ping it until user space opens the device, so
++	 * a kernel that hangs before user space still resets the board.
++	 */
++	if (readl(sunxi_wdt->wdt_base + sunxi_wdt->wdt_regs->wdt_mode) & WDT_MODE_EN) {
++		sunxi_wdt_start(&sunxi_wdt->wdt_dev);
++		set_bit(WDOG_HW_RUNNING, &sunxi_wdt->wdt_dev.status);
++	} else {
++		sunxi_wdt_stop(&sunxi_wdt->wdt_dev);
++	}
+ 
+ 	watchdog_stop_on_reboot(&sunxi_wdt->wdt_dev);
+ 	err = devm_watchdog_register_device(dev, &sunxi_wdt->wdt_dev);

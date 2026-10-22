@@ -3,8 +3,8 @@
 #   flash-sd.sh [-b BACKUP.tar.gz] [-y] /dev/sdX
 #     -b  first tar up the card's current first partition (if it is ext4)
 #     -y  don't ask for confirmation
-# Writes sdcard.img (U-Boot, rootfs, data), then grows the data partition
-# to the end of the card.
+# Writes sdcard.img (U-Boot, rootfs = system slot A, data), adds system
+# slot B (p3) in the last 384 MiB and grows the data partition up to it.
 set -e
 IMG=$(cd "$(dirname "$0")/.." && pwd)/output/images/sdcard.img
 BACKUP= YES=
@@ -54,7 +54,12 @@ if [ -z "$YES" ]; then
 fi
 dd if="$IMG" of="$DEV" bs=4M conv=fsync status=progress
 sync
-# grow partition 2 (data) to the end of the card
+# slot B (p3, empty until the first update) at the end of the card, then
+# grow partition 2 (data) up to it
+SECT=$(cat /sys/block/$name/size)
+B=$(( (SECT - 786432) / 2048 * 2048 ))
+echo "start=$B, size=786432, type=83" | sfdisk -q --append --no-reread "$DEV"
+dd if=/dev/zero of="$DEV" bs=1M seek=$((B / 2048)) count=1 conv=fsync 2>/dev/null
 echo ", +" | sfdisk -q -N 2 --no-reread "$DEV"
 partprobe "$DEV" 2>/dev/null || blockdev --rereadpt "$DEV"
 sleep 1

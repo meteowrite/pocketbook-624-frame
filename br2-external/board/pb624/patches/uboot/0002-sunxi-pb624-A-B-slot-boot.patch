@@ -1,0 +1,106 @@
+From: PB624
+Subject: [PATCH] sunxi: PB624 A/B slot boot with boot counting
+
+bootcmd "run pb_boot", see include/configs/pb624-ab.h.
+
+---
+diff -Nru a/include/configs/pb624-ab.h b/include/configs/pb624-ab.h
+--- a/include/configs/pb624-ab.h
++++ b/include/configs/pb624-ab.h
+@@ -0,0 +1,82 @@
++/* SPDX-License-Identifier: GPL-2.0+ */
++/*
++ * PB624 A/B system slots with boot counting (see README "Updating").
++ *
++ * Slot A = partition 1, slot B = partition 3, same card.  The boot state
++ * (BOOT_ORDER "A B"|"B A", BOOT_A_LEFT, BOOT_B_LEFT, PB_TRIAL) is a small
++ * checksummed environment ("env export -c", 4 KiB) kept twice in the gap
++ * between U-Boot and the first partition: blocks 0x780 (960 KiB) and 0x7c0
++ * (992 KiB).  Copy 1 is written first, so a torn write leaves copy 2.
++ * Linux (pb624-ota) reads and writes the same blocks.
++ *
++ * Every boot takes the first slot in BOOT_ORDER that has attempts left,
++ * decrements its counter, saves the state and boots it with the watchdog
++ * running (Linux keeps it running, patches/linux/0005).  Linux resets the counter once the system is up (and, after an
++ * update, once it is back on the network); a slot that panics, hangs or
++ * never comes up is retried until its counter runs out, then the other
++ * slot boots.  The rest of the default environment is not stored, so a
++ * new U-Boot always brings its own commands.
++ */
++#ifndef __PB624_AB_H
++#define __PB624_AB_H
++
++#define PB624_AB_ENV \
++	"pb_load=" \
++		"setenv BOOT_ORDER; setenv BOOT_A_LEFT; setenv BOOT_B_LEFT; setenv PB_TRIAL; " \
++		"if mmc read ${scriptaddr} 0x780 8 && " \
++		"env import -c ${scriptaddr} 0x1000 BOOT_ORDER BOOT_A_LEFT BOOT_B_LEFT PB_TRIAL; then " \
++			"echo pb624: boot state copy 1; " \
++		"elif mmc read ${scriptaddr} 0x7c0 8 && " \
++		"env import -c ${scriptaddr} 0x1000 BOOT_ORDER BOOT_A_LEFT BOOT_B_LEFT PB_TRIAL; then " \
++			"echo pb624: boot state copy 2; " \
++		"else echo pb624: no boot state, defaults; fi; " \
++		"if test \"${BOOT_ORDER}\" != \"B A\"; then setenv BOOT_ORDER \"A B\"; fi; " \
++		"if test -z \"${BOOT_A_LEFT}\"; then setenv BOOT_A_LEFT 3; fi; " \
++		"if test -z \"${BOOT_B_LEFT}\"; then setenv BOOT_B_LEFT 0; fi; " \
++		"if test -z \"${PB_TRIAL}\"; then setenv PB_TRIAL none; fi\0" \
++	"pb_save=" \
++		"env export -c -s 0x1000 ${scriptaddr} BOOT_ORDER BOOT_A_LEFT BOOT_B_LEFT PB_TRIAL && " \
++		"mmc write ${scriptaddr} 0x780 8 && mmc write ${scriptaddr} 0x7c0 8\0" \
++	"pb_select=" \
++		"setenv pb_slot; " \
++		"for s in ${BOOT_ORDER}; do " \
++			"if test -z \"${pb_slot}\" && test $s = A && test ${BOOT_A_LEFT} -gt 0; then " \
++				"setexpr BOOT_A_LEFT ${BOOT_A_LEFT} - 1; setenv pb_slot A; setenv pb_part 1; fi; " \
++			"if test -z \"${pb_slot}\" && test $s = B && test ${BOOT_B_LEFT} -gt 0; then " \
++				"setexpr BOOT_B_LEFT ${BOOT_B_LEFT} - 1; setenv pb_slot B; setenv pb_part 3; fi; " \
++		"done; " \
++		"if test -z \"${pb_slot}\"; then " \
++			"echo pb624: no attempts left, starting over; " \
++			"setenv BOOT_A_LEFT 2; setenv BOOT_B_LEFT 3; setenv pb_slot A; setenv pb_part 1; fi; " \
++		"echo pb624: slot ${pb_slot}, left A ${BOOT_A_LEFT} B ${BOOT_B_LEFT}, order ${BOOT_ORDER}\0" \
++	"pb_boot=" \
++		"run bootcmd_fel; " \
++		/* the system card: the boot card, else the other card slot, */ \
++		/* with a system in slot A or B (one of them may be broken) */ \
++		"setenv pb_dev; " \
++		"for d in ${mmc_bootdev} 0 1; do " \
++			"if test -z \"${pb_dev}\"; then " \
++				"if test -e mmc $d:1 /boot/extlinux/extlinux.conf || " \
++				"test -e mmc $d:3 /boot/extlinux/extlinux.conf; then setenv pb_dev $d; fi; " \
++			"fi; " \
++		"done; " \
++		"if test -z \"${pb_dev}\"; then setenv pb_dev ${mmc_bootdev}; fi; " \
++		"echo pb624: system on mmc ${pb_dev}; " \
++		"mmc dev ${pb_dev}; run pb_load; run pb_select; run pb_save; " \
++		/* extlinux.conf appends ${pb_root} after its own root= */ \
++		"setenv pb_root root=PARTUUID=50623624-0${pb_part} pb624.slot=${pb_slot}; " \
++		/* the A13 ignores the enable bit for a few seconds after a */ \
++		/* reset: set it again (mode 0x5b: 16 s, reset, enable) until */ \
++		/* it reads back, at most 10 s */ \
++		"if wdt dev watchdog@1c20c90 && wdt start 16000; then " \
++			"for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do " \
++				"setexpr.l pb_wdt *0x01c20c94; " \
++				"if test ${pb_wdt} != 5b; then sleep 0.5; mw.l 0x01c20c94 0x5b; fi; " \
++			"done; " \
++			"echo pb624: watchdog mode ${pb_wdt}; " \
++		"fi; " \
++		"sysboot mmc ${pb_dev}:${pb_part} any ${scriptaddr} /boot/extlinux/extlinux.conf; " \
++		"echo pb624: slot ${pb_slot} did not boot; " \
++		"wdt stop; sleep 1; reset\0"
++
++#endif
+diff -Nru a/include/configs/sunxi-common.h b/include/configs/sunxi-common.h
+--- a/include/configs/sunxi-common.h
++++ b/include/configs/sunxi-common.h
+@@ -327,7 +327,10 @@
+ #define FDTFILE CONFIG_DEFAULT_DEVICE_TREE ".dtb"
+ #endif
+ 
++#include <configs/pb624-ab.h>
++
+ #define CONFIG_EXTRA_ENV_SETTINGS \
++	PB624_AB_ENV \
+ 	CONSOLE_ENV_SETTINGS \
+ 	MEM_LAYOUT_ENV_SETTINGS \
+ 	MEM_LAYOUT_ENV_EXTRA_SETTINGS \

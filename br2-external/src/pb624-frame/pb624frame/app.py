@@ -13,15 +13,15 @@ import urllib.request
 
 from PIL import Image, ImageOps
 
-import gzip
 import subprocess
 
-from . import epd, ha, hw, mdns, mqtt, render, web
+from . import epd, ha, hw, mdns, mqtt, ota, render, web
 from .config import Config
 
 VERSION = '1.0'
 PHOTO_EXT = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp', '.tif', '.tiff', '.pgm')
 LOW_PWR = '/usr/share/pb624/low_pwr.pgm'
+TRIAL_TIMEOUT = 300          # s for an updated system to get back online
 
 try:
     import zoneinfo
@@ -60,6 +60,11 @@ class App:
         self.weather_error = ''
         self.net_lock = threading.Lock()
         self.wdt = None if sim else hw.Watchdog()
+        self.ota_state = 'ok'
+        self.ota_since = time.time()
+        self.ota_next = 0
+        self.system = {}
+        self._ota_boot()
         self._setup_services()
 
     def _setup_services(self):
@@ -144,6 +149,9 @@ class App:
             'mqtt': self.mqtt.connected.is_set(),
             'ha_error': self.weather_error,
             'sleep_policy': self.cfg['sleep'],
+            'system': self.system.get('running'),
+            'system_other': self.system.get('other'),
+            'system_update': self.system.get('last'),
         }
 
     def publish(self):
@@ -203,47 +211,90 @@ class App:
 
     def firmware_update(self, path):
         """Check an uploaded rootfs.ext2.gz (already on disk, see
-        update_path) and queue the update.  Streams: the image is 384 MB
-        uncompressed, far more than the RAM."""
-        disk = None if self.sim else hw.system_disk()
-        if not disk and not self.sim:
-            raise ValueError('system SD card not found')
-        size = 0
+        update_path) and queue the install."""
         try:
-            with gzip.open(path, 'rb') as f:
-                while True:
-                    n = len(f.read(1 << 20))
-                    if not n:
-                        break
-                    size += n
-        except (OSError, EOFError, gzip.BadGzipFile) as e:
+            size = ota.check_image(path)
+        except (OSError, ota.OtaError) as e:
             os.remove(path)
-            raise ValueError(f'not a valid gzip file: {e}')
-        if not self.sim:
-            part = os.path.basename(disk) + 'p1'
-            with open(f'/sys/class/block/{part}/size') as f:
-                psize = int(f.read()) * 512
-            if size != psize:
-                os.remove(path)
-                raise ValueError(f'image is {size} bytes, rootfs partition {psize}')
-        os.sync()
-        self.request('firmware', (path, disk))
+            raise ValueError(str(e))
+        self.request('firmware', path)
         return size
 
-    def _firmware(self, path, disk):
-        """Overwrite the (read-only) rootfs and reset through the watchdog.
-        Everything that execs or imports happens before the write."""
+    def _firmware(self, path):
+        """Write the update to the other system slot (the running one is
+        not touched) and reboot into it as a trial, see ota.py."""
         self._show(render.message(self.display.size, 'Updating...',
                                   ['Writing the new system,', 'the frame restarts by itself.']),
                    'update', full=False)
         if self.sim:
-            print('sim: would write', path, 'to', disk)
+            print('sim: would install', path)
             return
-        self.network_down()
-        cmd = f'zcat {path} | dd of={disk}p1 bs=1M conv=fsync 2>/dev/null; sync'
-        subprocess.run(['sh', '-c', cmd])
-        self.wdt.expire()
-        while True:                          # rootfs is gone; just wait
+        try:
+            info = ota.install(path)
+        except (OSError, ota.OtaError) as e:
+            print(f'ota: install failed: {e}')
+            self._ota_refresh()
+            self.system['last'] = f'install failed: {e}'
+            self.request('refresh')
+            return
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        self._show(render.message(self.display.size, 'Restarting...',
+                                  [f"system {info['slot']}", info['version']]),
+                   'update', full=False)
+        subprocess.run(['reboot'])
+
+    # -- system slots (ota.py) ----------------------------------------------
+    def _ota_boot(self):
+        """At start: reset the boot counter, or note an update on trial."""
+        if self.sim:
+            return
+        try:
+            self.ota_state = ota.boot_check()
+        except (OSError, ota.OtaError) as e:
+            print(f'ota: {e}')
+        if self.ota_state == 'trial':
+            print(f'ota: updated system on trial, confirming once online'
+                  f' (else reboot in {TRIAL_TIMEOUT} s)')
+        self._ota_refresh()
+
+    def _ota_refresh(self):
+        try:
+            s = ota.status()
+        except (OSError, ota.OtaError) as e:
+            print(f'ota: {e}')
+            return
+        o, last = s.get('other') or {}, s.get('last')
+        self.system = {
+            'running': f"{s['slot']}: {s['version']}" + (' (trial)' if s['trial'] else ''),
+            'other': f"{o['slot']}: {o['version'] or 'empty'}" if o else 'no slot B',
+            'last': ' '.join(str(last.get(k) or '') for k in ('result', 'slot', 'version', 'time'))
+                    if last else None,
+        }
+
+    def ota_trial_check(self):
+        """Every 10 s while an update is on trial: confirm it once the frame
+        is online (and HA answers, if configured); after TRIAL_TIMEOUT
+        reboot, U-Boot counts the failed attempt and eventually goes back
+        to the old system."""
+        if time.time() < self.ota_next:
+            return
+        self.ota_next = time.time() + 10
+        n = self.net()
+        if n['ip'] and (not self.ha.configured or self._ha_reachable()):
+            try:
+                ota.confirm()
+                self.ota_state = 'ok'
+            except (OSError, ota.OtaError) as e:
+                print(f'ota: confirm failed: {e}')
+            self._ota_refresh()
+            self.publish()
+        elif time.time() - self.ota_since > TRIAL_TIMEOUT:
+            print(f'ota: not online after {TRIAL_TIMEOUT} s, rebooting')
+            subprocess.run(['reboot'])
             time.sleep(60)
 
     def delete_photo(self, name):
@@ -485,7 +536,7 @@ class App:
         elif cmd == 'show_image':
             self.show_image(arg)
         elif cmd == 'firmware':
-            self._firmware(*arg)
+            self._firmware(arg)
         elif cmd == 'config':
             self.display.rotation = self.cfg['rotation']
             if not self.sim:
@@ -556,7 +607,7 @@ class App:
 
     def want_sleep(self):
         pol = self.cfg['sleep']
-        if self.sim or pol == 'never':
+        if self.sim or pol == 'never' or self.ota_state == 'trial':
             return False
         if pol == 'auto' and self.power()['external']:
             return False
@@ -624,6 +675,8 @@ class App:
         self.refresh()
         while True:
             self.check_battery()
+            if self.ota_state == 'trial' and not self.sim:
+                self.ota_trial_check()
             if self.want_sleep():
                 self.sleep()
             if not self.sim and time.time() >= self.next_check:

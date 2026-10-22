@@ -23,7 +23,7 @@ MQTT device.
 ```
 build.sh                     build: Buildroot in buildroot/, downloads in dl/,
                              output in output/ (images in output/images)
-scripts/update.sh            update a running frame over ssh (U-Boot + rootfs)
+scripts/update.sh            update a running frame over ssh (A/B system slots)
 scripts/flash-sd.sh          write sdcard.img to a card in a USB reader
 scripts/fel-boot.sh          dev boot over FEL (kernel/DTB from the build, rootfs on SD)
 br2-external/                Buildroot external tree (BR2_EXTERNAL "PB624")
@@ -53,7 +53,7 @@ high after reset, so the A13 boot ROM can **not** boot from it. The BROM
 boots from the internal slot (mmc2, PC6-11), like the stock firmware did.
 U-Boot (own DT + `preboot` "gpio clear PE4") powers the external slot and
 scans the internal card first, then the external one. The kernel finds its
-rootfs by `root=PARTUUID=50623624-01` and S00data mounts the ext4 labelled
+rootfs by `root=PARTUUID=50623624-01` (`-03` for system slot B) and S00data mounts the ext4 labelled
 `data`, so the same card works in either slot:
 - one card in the internal slot (everything), or
 - a card with just U-Boot in the internal slot + the system card outside.
@@ -84,13 +84,16 @@ rootfs verified by md5); any other card is fully rewritten, its old p1 tarred
 into `/data/backup/old-rootfs.tar.gz`.
 Rebuild after app changes: `./build.sh pb624-frame-rebuild all`.
 
-SD card: U-Boot at 8 KiB, p1 ext4 rootfs (read-only, kernel and DTB in
-`/boot`, extlinux), p2 ext4 `/data` (grown to the full card):
+SD card: U-Boot at 8 KiB, A/B boot state at 960 KiB, p1 ext4 system slot A
+(read-only rootfs, kernel and DTB in `/boot`, extlinux), p2 ext4 `/data`,
+p3 system slot B (last 384 MiB of the card, filled by the first update):
 `/data/config/{frame.json,wpa_supplicant.conf}`, `/data/photos`,
 `/data/dropbear` (host keys), `/data/ssh/authorized_keys`.
 
-Login: serial console (ttyS0 115200) or ssh, root password `pb624` (set in
-the defconfig; prefer `authorized_keys`).
+Login: ssh, the serial console (ttyS0 115200, on the board) or USB serial:
+plug the frame's micro-USB into a PC and open the new COM port /
+`/dev/ttyACM0` (any baud rate). Root password `pb624` (set in the
+defconfig; prefer `authorized_keys`).
 
 ## The application
 Screens: weather dashboard (HA weather entity, daily forecast, extra
@@ -179,12 +182,41 @@ console). Measured USB input during INIT+GC16: 464 mA at 432 MHz, 591 mA at
 battery fitted or a >= 1 A charger the cap is lifted.
 
 ## Updating a running frame
-- Web UI "System update": upload `output/images/pb624-rootfs.ext2.gz` (or
-  `curl -F rootfs=@pb624-rootfs.ext2.gz http://pb624.local/api/update`). The
-  upload is streamed to `/data/update`, checked (gzip, exact partition size),
-  the rootfs is rewritten and the watchdog reboots the frame (~5 min).
-- `scripts/update.sh [host]` (default pb624.local) does the same over ssh (key
-  `br2-external/board/pb624/local/pb624_dev_key`) and also updates U-Boot.
+The system is kept twice (slots A and B). An update is written to the slot
+that is not running, read back and checked, and then booted as a trial;
+the running system is never touched, so a failed or interrupted update
+just leaves the old one in place.
+- `scripts/update.sh [host]` (default pb624.local): uploads
+  `output/images/pb624-rootfs.ext2.gz` over ssh (key
+  `br2-external/board/pb624/local/pb624_dev_key`), installs it, reboots and
+  waits until the new system is confirmed (or rolled back). `-u` also
+  rewrites U-Boot when it changed (see below).
+- Web UI "System update": upload `pb624-rootfs.ext2.gz` (or
+  `curl -F rootfs=@pb624-rootfs.ext2.gz http://pb624.local/api/update`).
+- On the frame: `pb624-ota status|install FILE.gz|switch|bootloader FILE`.
+
+How the fallback works: U-Boot boots the first slot in the boot order that
+has attempts left and counts the attempt down (state in two checksummed
+copies before the first partition, `patches/uboot/0002`). The watchdog runs
+from U-Boot on (`patches/linux/0005`), so a kernel that panics or hangs
+also resets the board. A confirmed system resets its counter at every
+start. A freshly installed one gets two attempts and must be back on the
+network (Wi-Fi, and Home Assistant if configured) within 5 minutes,
+otherwise it reboots; after the second failure U-Boot boots the old slot,
+which records "rolled back" (web UI / MQTT "Last system update").
+
+U-Boot itself is not duplicated (the A13 boot ROM reads it from one place),
+so `update.sh -u` / `pb624-ota bootloader` only writes it when it differs,
+then reads it back. If that one-second write is interrupted, recover over
+USB: take the card out, the board then comes up in FEL mode, and boot it
+with `sunxi-fel uboot u-boot-sunxi-with-spl.bin` (or `scripts/fel-boot.sh`)
+with the card back in, then rewrite U-Boot.
+
+Old cards (made before A/B, no p3): update once in place with the FEL
+ramdisk (`fel-ramdisk/flash-sd-onboard.sh`) or the serial console, then add
+slot B from a serial/USB login, with `/data` unmounted:
+`/etc/init.d/S80frame stop; killall syslogd klogd crond; umount /data;
+pb624-ota make-slot-b; reboot` (shrinks the data partition by 384 MiB).
 
 The frame answers mDNS: `http://pb624.local/` works whatever IP DHCP gives.
 
