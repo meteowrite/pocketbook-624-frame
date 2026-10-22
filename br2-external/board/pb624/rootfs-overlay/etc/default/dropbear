@@ -1,0 +1,3 @@
+# ssh with keys only (/data/ssh/authorized_keys); the root password is for
+# the serial consoles (ttyS0, USB ttyGS0)
+DROPBEAR_ARGS="-s"

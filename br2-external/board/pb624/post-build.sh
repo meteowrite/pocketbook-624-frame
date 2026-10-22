@@ -6,6 +6,12 @@ T="$1"
 ln -snf /data/dropbear "$T/etc/dropbear"
 mkdir -p "$T/root"
 ln -snf /data/ssh "$T/root/.ssh"
+# root password on /data (change it with passwd, kept across updates):
+# S00data creates /data/config/shadow from shadow.default, post-fakeroot.sh
+# turns etc/shadow into a link (after the permission tables need the file)
+# (busybox passwd also rewrites /etc/passwd, so that one moves too)
+cp -p "$T/etc/shadow" "$T/etc/shadow.default"
+cp -p "$T/etc/passwd" "$T/etc/passwd.default"
 # mount point for the data partition (rootfs is read-only)
 mkdir -p "$T/data"
 # login on the USB serial gadget too (g_serial, /dev/ttyGS0)

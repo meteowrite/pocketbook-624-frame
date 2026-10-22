@@ -23,6 +23,19 @@ start)
 		mkdir -p /data/config /data/photos /data/dropbear /data/ssh /data/state /data/log
 		echo "FAIL (using tmpfs)"
 	fi
+	# /etc/shadow -> /data/config/shadow (passwd works, survives updates);
+	# start over from the build's default if it is missing or has no root
+	S=/data/config/shadow
+	if ! grep -q '^root:' $S 2>/dev/null; then
+		cp /etc/shadow.default $S
+		echo "root password reset to the default"
+	fi
+	chown 0:0 $S
+	chmod 600 $S
+	# /etc/passwd -> /data/config/passwd: no secrets in it ("x"), so it
+	# always comes from this system (busybox passwd rewrites it)
+	cp /etc/passwd.default /data/config/passwd
+	chmod 644 /data/config/passwd
 	;;
 stop)
 	sync
