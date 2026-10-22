@@ -92,12 +92,12 @@ p3 system slot B (last 384 MiB of the card, filled by the first update):
 
 Login: ssh, the serial console (ttyS0 115200, on the board) or USB serial:
 plug the frame's micro-USB into a PC and open the new COM port /
-`/dev/ttyACM0` (any baud rate). ssh takes keys only
+`/dev/ttyACM0` (any baud rate). ssh takes the root password or a key
 (`/data/ssh/authorized_keys`, from `local/pb624_dev_key.pub` or
-`local/authorized_keys` at build time); the root password is for the
-serial consoles. It starts as `pb624` (defconfig) and is changed on the
-frame with `passwd`: `/etc/shadow` links to `/data/config/shadow`, so the
-new one survives updates (if that file is lost, the default is back).
+`local/authorized_keys` at build time). The password starts as `pb624`
+(defconfig, change it!) and is changed on the frame with `passwd`:
+`/etc/shadow` links to `/data/config/shadow`, so the new one survives
+updates (if that file is lost, the default is back).
 
 ## The application
 Screens: weather dashboard (HA weather entity, daily forecast, extra
